@@ -3,14 +3,20 @@ import { Expense, BudgetPlan } from '../types';
 export interface BackupData {
   version: string;
   exportDate: string;
+  initialBalance?: number;
   expenses: Expense[];
   budgets: Record<string, BudgetPlan>;
 }
 
-export const exportToJson = (expenses: Expense[], budgets: Record<string, BudgetPlan>): string => {
+export const exportToJson = (
+  expenses: Expense[],
+  budgets: Record<string, BudgetPlan>,
+  initialBalance = 0
+): string => {
   const payload: BackupData = {
-    version: '1.0.0',
+    version: '1.1.0',
     exportDate: new Date().toISOString(),
+    initialBalance,
     expenses,
     budgets
   };
@@ -18,9 +24,10 @@ export const exportToJson = (expenses: Expense[], budgets: Record<string, Budget
 };
 
 export const exportToCsv = (expenses: Expense[]): string => {
-  const headers = ['Date', 'Title', 'Category', 'Amount (INR)', 'Payment Method', 'Recurring', 'Notes'];
+  const headers = ['Date', 'Type', 'Title', 'Category', 'Amount (INR)', 'Payment Method', 'Recurring', 'Notes'];
   const rows = expenses.map(e => [
     e.date,
+    e.type === 'income' ? 'Income' : 'Expense',
     `"${(e.title || '').replace(/"/g, '""')}"`,
     `"${(e.category || '').replace(/"/g, '""')}"`,
     e.amount.toFixed(2),
@@ -34,7 +41,7 @@ export const exportToCsv = (expenses: Expense[]): string => {
 
 export const parseJsonBackup = (
   jsonStr: string
-): { success: boolean; data?: { expenses: Expense[]; budgets: Record<string, BudgetPlan> }; error?: string } => {
+): { success: boolean; data?: { expenses: Expense[]; budgets: Record<string, BudgetPlan>; initialBalance?: number }; error?: string } => {
   try {
     const parsed = JSON.parse(jsonStr);
     if (!parsed || typeof parsed !== 'object') {
@@ -57,12 +64,14 @@ export const parseJsonBackup = (
     });
 
     const budgets = (parsed.budgets && typeof parsed.budgets === 'object') ? parsed.budgets : {};
+    const initialBalance = typeof parsed.initialBalance === 'number' ? parsed.initialBalance : 0;
 
     return {
       success: true,
       data: {
         expenses: validExpenses,
-        budgets
+        budgets,
+        initialBalance
       }
     };
   } catch (err) {

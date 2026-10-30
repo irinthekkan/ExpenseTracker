@@ -2,20 +2,21 @@ import React, { useState, useEffect } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  Target,
   Copy,
   Save,
   CheckCircle2,
   TrendingDown,
   TrendingUp,
-  AlertTriangle,
   Landmark,
   CreditCard,
   Zap,
   Users,
   ShieldCheck,
   Tag,
-  Plus
+  Plus,
+  ArrowUpRight,
+  ArrowDownRight,
+  PiggyBank
 } from 'lucide-react';
 import { useExpenses } from '../context/ExpenseContext';
 import { calculateMonthSummary, getPreviousMonthKey, getNextMonthKey } from '../utils/calculations';
@@ -36,12 +37,12 @@ export const MonthlyPlanning: React.FC = () => {
 
   const currentPlan = budgets[currentMonthKey] || {
     monthKey: currentMonthKey,
-    totalBudget: 0,
+    expectedIncome: 0,
     categoryBudgets: {}
   };
 
   const [categoryBudgets, setCategoryBudgets] = useState<Record<string, number>>({});
-  const [totalBudgetInput, setTotalBudgetInput] = useState<string>('');
+  const [expectedIncomeInput, setExpectedIncomeInput] = useState<string>('');
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [newCatInput, setNewCatInput] = useState<string>('');
   const [showAddCat, setShowAddCat] = useState<boolean>(false);
@@ -51,7 +52,11 @@ export const MonthlyPlanning: React.FC = () => {
   // Sync state whenever month or budget updates
   useEffect(() => {
     setCategoryBudgets(currentPlan.categoryBudgets || {});
-    setTotalBudgetInput(currentPlan.totalBudget > 0 ? currentPlan.totalBudget.toString() : '');
+    setExpectedIncomeInput(
+      currentPlan.expectedIncome !== undefined && currentPlan.expectedIncome > 0
+        ? currentPlan.expectedIncome.toString()
+        : ''
+    );
   }, [currentMonthKey, budgets]);
 
   const handlePrevMonth = () => {
@@ -70,19 +75,17 @@ export const MonthlyPlanning: React.FC = () => {
     }));
   };
 
-  const handleSaveBudget = () => {
-    const sumOfCategories = Object.values(categoryBudgets).reduce((a, b) => a + b, 0);
-    const parsedTotal = parseFloat(totalBudgetInput);
-    const finalTotal = !isNaN(parsedTotal) && parsedTotal > 0 ? parsedTotal : sumOfCategories;
+  const handleSavePlan = () => {
+    const parsedExpectedIncome = parseFloat(expectedIncomeInput) || 0;
 
     const plan: BudgetPlan = {
       monthKey: currentMonthKey,
-      totalBudget: finalTotal,
+      expectedIncome: parsedExpectedIncome,
       categoryBudgets
     };
 
     setMonthlyBudget(plan);
-    setSavedMessage('Monthly budget plan saved!');
+    setSavedMessage('Monthly income & expense plan saved!');
     setTimeout(() => setSavedMessage(null), 3000);
   };
 
@@ -105,7 +108,6 @@ export const MonthlyPlanning: React.FC = () => {
     setShowAddCat(false);
   };
 
-  // Combine default categories and custom categories
   const allPlanningCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...customCategories]));
 
   const getCategoryIcon = (category: string) => {
@@ -125,7 +127,9 @@ export const MonthlyPlanning: React.FC = () => {
     }
   };
 
-  const sumOfCategoryBudgets = Object.values(categoryBudgets).reduce((a, b) => a + b, 0);
+  const sumOfPlannedExpenses = Object.values(categoryBudgets).reduce((a, b) => a + b, 0);
+  const parsedExpectedIncome = parseFloat(expectedIncomeInput) || 0;
+  const plannedNetSavings = parsedExpectedIncome - sumOfPlannedExpenses;
 
   return (
     <div className="space-y-4 pb-20">
@@ -143,7 +147,7 @@ export const MonthlyPlanning: React.FC = () => {
           <h2 className="text-sm font-bold text-slate-100">
             {formatMonthYear(currentMonthKey)}
           </h2>
-          <span className="text-[11px] text-slate-400 font-medium">Budget Planning</span>
+          <span className="text-[11px] text-slate-400 font-medium">Monthly Financial Planning</span>
         </div>
 
         <button
@@ -155,46 +159,74 @@ export const MonthlyPlanning: React.FC = () => {
         </button>
       </div>
 
-      {/* Plan Performance Overview Card */}
+      {/* Expected Income Input Card */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 border border-slate-800 rounded-3xl p-5 shadow-xl relative overflow-hidden">
         <div className="flex items-start justify-between">
-          <div>
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-              Total Planned Budget
+          <div className="flex-1 pr-4">
+            <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+              <ArrowUpRight className="w-4 h-4 text-emerald-400" />
+              Expected Income this Month
             </span>
-            <div className="text-2xl font-black text-white mt-1">
-              {formatRupee(summary.totalBudget)}
+            <div className="relative mt-2">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-lg font-black text-emerald-400">
+                ₹
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="1000"
+                placeholder="Enter expected salary/income..."
+                value={expectedIncomeInput}
+                onChange={(e) => setExpectedIncomeInput(e.target.value)}
+                className="w-full bg-slate-950/80 border border-slate-700/80 rounded-2xl pl-8 pr-4 py-2.5 text-2xl font-black text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+              />
             </div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              Sum of categories: {formatRupee(sumOfCategoryBudgets)}
-            </p>
-          </div>
-
-          <div className="text-right">
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-              Actual Spent
-            </span>
-            <div className="text-xl font-bold text-slate-200 mt-1">
-              {formatRupee(summary.totalSpent)}
-            </div>
-            <div className={`text-xs font-semibold mt-1 flex items-center justify-end gap-1 ${
-              summary.remaining >= 0 ? 'text-emerald-400' : 'text-rose-400'
-            }`}>
-              {summary.remaining >= 0 ? (
-                <>
-                  <TrendingDown className="w-3.5 h-3.5" />
-                  {formatRupee(summary.remaining)} under
-                </>
-              ) : (
-                <>
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  {formatRupee(Math.abs(summary.remaining))} over
-                </>
+            <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
+              <span>Received so far:</span>
+              <span className="font-bold text-emerald-400">{formatRupee(summary.totalIncome)}</span>
+              {parsedExpectedIncome > 0 && (
+                <span className="text-[11px] text-slate-500">
+                  ({Math.round((summary.totalIncome / parsedExpectedIncome) * 100)}% received)
+                </span>
               )}
             </div>
           </div>
         </div>
 
+        {/* Planned Net Savings Row */}
+        <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-800/80">
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
+              Planned Category Expenses
+            </span>
+            <div className="text-base font-black text-white mt-0.5">
+              {formatRupee(sumOfPlannedExpenses)}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              Actual spent: {formatRupee(summary.totalSpent)}
+            </p>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <PiggyBank className="w-3.5 h-3.5 text-emerald-400" />
+              Expected Net Savings
+            </span>
+            <div
+              className={`text-base font-black mt-0.5 ${
+                plannedNetSavings >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              {plannedNetSavings >= 0 ? `+${formatRupee(plannedNetSavings)}` : formatRupee(plannedNetSavings)}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              (Expected Income - Planned Expenses)
+            </p>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
         <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-800/80">
           <button
             onClick={handleCopyPrevious}
@@ -205,11 +237,11 @@ export const MonthlyPlanning: React.FC = () => {
           </button>
 
           <button
-            onClick={handleSaveBudget}
+            onClick={handleSavePlan}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
           >
             <Save className="w-3.5 h-3.5" />
-            <span>Save Budget Plan</span>
+            <span>Save Monthly Plan</span>
           </button>
         </div>
 
@@ -221,33 +253,12 @@ export const MonthlyPlanning: React.FC = () => {
         )}
       </div>
 
-      {/* Overall Total Target Override Input */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4">
-        <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-          Overall Total Monthly Target (Optional Cap)
-        </label>
-        <div className="relative">
-          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
-            ₹
-          </span>
-          <input
-            type="number"
-            min="0"
-            step="100"
-            value={totalBudgetInput}
-            onChange={(e) => setTotalBudgetInput(e.target.value)}
-            placeholder={`Auto-calculates from categories (${sumOfCategoryBudgets})`}
-            className="w-full bg-slate-950/80 border border-slate-700 rounded-xl pl-8 pr-4 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-emerald-500"
-          />
-        </div>
-      </div>
-
-      {/* Category Budget Allocation List */}
+      {/* Category Expense Allocations */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-            <Target className="w-4 h-4 text-emerald-400" />
-            Category Allocations
+            <Tag className="w-4 h-4 text-emerald-400" />
+            Planned Category Expenses
           </h3>
 
           <button
@@ -263,7 +274,7 @@ export const MonthlyPlanning: React.FC = () => {
           <div className="flex items-center gap-2 p-3 bg-slate-900 border border-slate-800 rounded-xl animate-fade-in">
             <input
               type="text"
-              placeholder="e.g. Investments, Subscriptions"
+              placeholder="e.g. Subscriptions, Travel"
               value={newCatInput}
               onChange={(e) => setNewCatInput(e.target.value)}
               className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
@@ -298,7 +309,8 @@ export const MonthlyPlanning: React.FC = () => {
                     <div>
                       <h4 className="text-sm font-semibold text-slate-100">{category}</h4>
                       <p className="text-[11px] text-slate-400">
-                        Spent so far: <span className="font-semibold text-slate-300">{formatRupee(currentCatSpent)}</span>
+                        Spent so far:{' '}
+                        <span className="font-semibold text-slate-300">{formatRupee(currentCatSpent)}</span>
                       </p>
                     </div>
                   </div>
@@ -327,14 +339,21 @@ export const MonthlyPlanning: React.FC = () => {
                       <span className="text-slate-400">
                         {Math.round((currentCatSpent / plannedAmount) * 100)}% utilized
                       </span>
-                      <span className={isExceeded ? 'text-rose-400 font-semibold flex items-center gap-1' : 'text-slate-400'}>
+                      <span
+                        className={`font-semibold flex items-center gap-1 ${
+                          isExceeded ? 'text-rose-400' : 'text-slate-400'
+                        }`}
+                      >
                         {isExceeded ? (
                           <>
-                            <AlertTriangle className="w-3 h-3" />
+                            <TrendingUp className="w-3 h-3 text-rose-400" />
                             Over by {formatRupee(Math.abs(diff))}
                           </>
                         ) : (
-                          `${formatRupee(diff)} remaining`
+                          <>
+                            <TrendingDown className="w-3 h-3 text-emerald-400" />
+                            {formatRupee(diff)} remaining
+                          </>
                         )}
                       </span>
                     </div>

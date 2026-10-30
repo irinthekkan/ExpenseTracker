@@ -6,6 +6,7 @@ import { MonthlyPlanning } from './components/MonthlyPlanning';
 import { AnnualView } from './components/AnnualView';
 import { ExpenseModal } from './components/ExpenseModal';
 import { SettingsModal } from './components/SettingsModal';
+import { BalanceAdjustmentModal } from './components/BalanceAdjustmentModal';
 import { useExpenses } from './context/ExpenseContext';
 import { Expense } from './types';
 
@@ -13,6 +14,7 @@ export const AppContent: React.FC = () => {
   const { activeTab } = useExpenses();
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
   const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
 
   const handleOpenAddExpense = () => {
@@ -40,6 +42,7 @@ export const AppContent: React.FC = () => {
             <MonthlyTracker
               onEditExpense={handleEditExpense}
               onOpenAddExpense={handleOpenAddExpense}
+              onOpenBalanceModal={() => setIsBalanceModalOpen(true)}
             />
           </div>
         )}
@@ -60,7 +63,7 @@ export const AppContent: React.FC = () => {
       {/* Bottom Navigation */}
       <BottomNav onOpenAddExpense={handleOpenAddExpense} />
 
-      {/* Add / Edit Expense Modal */}
+      {/* Add / Edit Transaction Modal */}
       <ExpenseModal
         isOpen={isExpenseModalOpen}
         onClose={() => {
@@ -68,6 +71,12 @@ export const AppContent: React.FC = () => {
           setExpenseToEdit(null);
         }}
         expenseToEdit={expenseToEdit}
+      />
+
+      {/* Update & Adjust Balance Modal */}
+      <BalanceAdjustmentModal
+        isOpen={isBalanceModalOpen}
+        onClose={() => setIsBalanceModalOpen(false)}
       />
 
       {/* Settings & Backup Modal */}

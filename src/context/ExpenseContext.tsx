@@ -3,28 +3,42 @@ import {
   Expense,
   BudgetPlan,
   ActiveTab,
-  DEFAULT_CATEGORIES
+  DEFAULT_CATEGORIES,
+  DEFAULT_INCOME_CATEGORIES
 } from '../types';
 import { getCurrentMonthKey, getCurrentDateStr } from '../utils/formatters';
 import { exportToJson, exportToCsv, parseJsonBackup } from '../utils/exportImport';
-import { getPreviousMonthKey } from '../utils/calculations';
+import {
+  getPreviousMonthKey,
+  calculateAvailableBalance,
+  prepareBalanceAdjustment
+} from '../utils/calculations';
 
 interface ExpenseContextType {
   expenses: Expense[];
   budgets: Record<string, BudgetPlan>;
+  initialBalance: number;
+  availableBalance: number;
   currentMonthKey: string;
   currentYear: number;
   activeTab: ActiveTab;
   customCategories: string[];
+  customIncomeCategories: string[];
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateExpense: (id: string, expense: Partial<Expense>) => void;
   deleteExpense: (id: string) => void;
   setMonthlyBudget: (plan: BudgetPlan) => void;
   copyBudgetFromPreviousMonth: (targetMonthKey: string) => boolean;
+  adjustBalance: (
+    targetBalance: number,
+    category?: string,
+    customTitle?: string
+  ) => { success: boolean; difference: number; type: 'income' | 'expense' | 'none'; message: string };
+  setInitialBalance: (amount: number) => void;
   setCurrentMonthKey: (key: string) => void;
   setCurrentYear: (year: number) => void;
   setActiveTab: (tab: ActiveTab) => void;
-  addCustomCategory: (cat: string) => void;
+  addCustomCategory: (cat: string, isIncome?: boolean) => void;
   exportBackup: () => string;
   exportCsvData: () => string;
   importBackup: (jsonStr: string) => { success: boolean; message: string };
@@ -34,7 +48,9 @@ interface ExpenseContextType {
 const STORAGE_KEYS = {
   EXPENSES: 'expensetracker_expenses_v1',
   BUDGETS: 'expensetracker_budgets_v1',
-  CUSTOM_CATS: 'expensetracker_custom_cats_v1'
+  CUSTOM_CATS: 'expensetracker_custom_cats_v1',
+  CUSTOM_INCOME_CATS: 'expensetracker_custom_income_cats_v1',
+  INITIAL_BALANCE: 'expensetracker_initial_bal_v1'
 };
 
 const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
@@ -45,12 +61,30 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeTab, setActiveTab] = useState<ActiveTab>('monthly');
 
   // Initial Seed Data generator for first launch
-  const getInitialSeed = (): { expenses: Expense[]; budgets: Record<string, BudgetPlan> } => {
+  const getInitialSeed = (): {
+    expenses: Expense[];
+    budgets: Record<string, BudgetPlan>;
+    initialBalance: number;
+  } => {
     const today = getCurrentDateStr();
     const thisMonth = getCurrentMonthKey();
     const seedExpenses: Expense[] = [
       {
-        id: 'seed-1',
+        id: 'seed-inc-1',
+        type: 'income',
+        title: 'Monthly Salary Credit',
+        amount: 95000,
+        category: 'Salary',
+        date: today,
+        paymentMethod: 'Net Banking',
+        isRecurring: true,
+        notes: 'Monthly employer direct deposit',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'seed-exp-1',
+        type: 'expense',
         title: 'Home Loan EMI',
         amount: 32500,
         category: 'Loan',
@@ -62,7 +96,8 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updatedAt: new Date().toISOString()
       },
       {
-        id: 'seed-2',
+        id: 'seed-exp-2',
+        type: 'expense',
         title: 'Credit Card Statement',
         amount: 14200,
         category: 'Credit Card',
@@ -74,7 +109,8 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updatedAt: new Date().toISOString()
       },
       {
-        id: 'seed-3',
+        id: 'seed-exp-3',
+        type: 'expense',
         title: 'Electricity & Water Bill',
         amount: 3850,
         category: 'Utilities',
@@ -86,7 +122,8 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updatedAt: new Date().toISOString()
       },
       {
-        id: 'seed-4',
+        id: 'seed-exp-4',
+        type: 'expense',
         title: 'Family Groceries & Provisions',
         amount: 12500,
         category: 'Family',
@@ -98,7 +135,8 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updatedAt: new Date().toISOString()
       },
       {
-        id: 'seed-5',
+        id: 'seed-exp-5',
+        type: 'expense',
         title: 'Health & Life Insurance Premium',
         amount: 8500,
         category: 'Insurance',
@@ -114,19 +152,38 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const seedBudgets: Record<string, BudgetPlan> = {
       [thisMonth]: {
         monthKey: thisMonth,
-        totalBudget: 85000,
+        expectedIncome: 95000,
         categoryBudgets: {
           'Loan': 35000,
           'Credit Card': 18000,
           'Utilities': 5000,
           'Family': 15000,
-          'Insurance': 10000
+          'Insurance': 10000,
+          'Miscellaneous': 5000
         }
       }
     };
 
-    return { expenses: seedExpenses, budgets: seedBudgets };
+    return {
+      expenses: seedExpenses,
+      budgets: seedBudgets,
+      initialBalance: 50000
+    };
   };
+
+  const seed = getInitialSeed();
+
+  const [initialBalance, setInitialBalanceState] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.INITIAL_BALANCE);
+      if (saved !== null) {
+        return parseFloat(saved) || 0;
+      }
+    } catch {
+      // fallback
+    }
+    return seed.initialBalance;
+  });
 
   const [expenses, setExpenses] = useState<Expense[]>(() => {
     try {
@@ -137,7 +194,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch {
       // fallback
     }
-    return getInitialSeed().expenses;
+    return seed.expenses;
   });
 
   const [budgets, setBudgets] = useState<Record<string, BudgetPlan>>(() => {
@@ -149,7 +206,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch {
       // fallback
     }
-    return getInitialSeed().budgets;
+    return seed.budgets;
   });
 
   const [customCategories, setCustomCategories] = useState<string[]>(() => {
@@ -164,7 +221,22 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return [];
   });
 
-  // Save to localStorage whenever state changes
+  const [customIncomeCategories, setCustomIncomeCategories] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CUSTOM_INCOME_CATS);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {
+      // fallback
+    }
+    return [];
+  });
+
+  // Calculate live available balance
+  const availableBalance = calculateAvailableBalance(initialBalance, expenses);
+
+  // Persistence effects
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(expenses));
@@ -183,25 +255,48 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   useEffect(() => {
     try {
+      localStorage.setItem(STORAGE_KEYS.INITIAL_BALANCE, initialBalance.toString());
+    } catch {
+      // ignore
+    }
+  }, [initialBalance]);
+
+  useEffect(() => {
+    try {
       localStorage.setItem(STORAGE_KEYS.CUSTOM_CATS, JSON.stringify(customCategories));
     } catch {
       // ignore
     }
   }, [customCategories]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CUSTOM_INCOME_CATS, JSON.stringify(customIncomeCategories));
+    } catch {
+      // ignore
+    }
+  }, [customIncomeCategories]);
+
   const addExpense = (expenseData: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newExpense: Expense = {
       ...expenseData,
-      id: 'exp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      type: expenseData.type || 'expense',
+      id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
     setExpenses(prev => [newExpense, ...prev]);
 
-    // Check if category is not in default or custom list
-    const isDefault = (DEFAULT_CATEGORIES as readonly string[]).includes(newExpense.category);
-    if (!isDefault && !customCategories.includes(newExpense.category)) {
-      setCustomCategories(prev => [...prev, newExpense.category]);
+    if (newExpense.type === 'income') {
+      const isDefault = (DEFAULT_INCOME_CATEGORIES as readonly string[]).includes(newExpense.category);
+      if (!isDefault && !customIncomeCategories.includes(newExpense.category)) {
+        setCustomIncomeCategories(prev => [...prev, newExpense.category]);
+      }
+    } else {
+      const isDefault = (DEFAULT_CATEGORIES as readonly string[]).includes(newExpense.category);
+      if (!isDefault && !customCategories.includes(newExpense.category)) {
+        setCustomCategories(prev => [...prev, newExpense.category]);
+      }
     }
   };
 
@@ -231,6 +326,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...prev,
       [targetMonthKey]: {
         monthKey: targetMonthKey,
+        expectedIncome: prevBudget.expectedIncome,
         totalBudget: prevBudget.totalBudget,
         categoryBudgets: { ...prevBudget.categoryBudgets }
       }
@@ -238,16 +334,54 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return true;
   };
 
-  const addCustomCategory = (cat: string) => {
+  const adjustBalance = (
+    targetBalance: number,
+    category = 'Miscellaneous',
+    customTitle?: string
+  ) => {
+    const adj = prepareBalanceAdjustment(availableBalance, targetBalance, category, customTitle);
+    if (adj.type === 'none' || !adj.transaction) {
+      return {
+        success: true,
+        difference: 0,
+        type: 'none' as const,
+        message: 'Current tracked balance already matches target balance.'
+      };
+    }
+
+    addExpense(adj.transaction);
+
+    const diffStr = `₹${Math.abs(adj.difference).toLocaleString('en-IN')}`;
+    const actionStr = adj.type === 'income' ? `added to Income (${adj.transaction.category})` : `added to Expenses (${adj.transaction.category})`;
+
+    return {
+      success: true,
+      difference: adj.difference,
+      type: adj.type,
+      message: `Adjusted balance: ${diffStr} ${actionStr}. Tracked balance is now ₹${targetBalance.toLocaleString('en-IN')}.`
+    };
+  };
+
+  const setInitialBalance = (amount: number) => {
+    setInitialBalanceState(amount);
+  };
+
+  const addCustomCategory = (cat: string, isIncome = false) => {
     const trimmed = cat.trim();
     if (!trimmed) return;
-    if (!customCategories.includes(trimmed) && !(DEFAULT_CATEGORIES as readonly string[]).includes(trimmed)) {
-      setCustomCategories(prev => [...prev, trimmed]);
+    if (isIncome) {
+      if (!customIncomeCategories.includes(trimmed) && !(DEFAULT_INCOME_CATEGORIES as readonly string[]).includes(trimmed)) {
+        setCustomIncomeCategories(prev => [...prev, trimmed]);
+      }
+    } else {
+      if (!customCategories.includes(trimmed) && !(DEFAULT_CATEGORIES as readonly string[]).includes(trimmed)) {
+        setCustomCategories(prev => [...prev, trimmed]);
+      }
     }
   };
 
   const exportBackup = (): string => {
-    return exportToJson(expenses, budgets);
+    return exportToJson(expenses, budgets, initialBalance);
   };
 
   const exportCsvData = (): string => {
@@ -262,29 +396,45 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setExpenses(res.data.expenses);
     setBudgets(res.data.budgets);
+    if (typeof res.data.initialBalance === 'number') {
+      setInitialBalanceState(res.data.initialBalance);
+    }
 
-    // Extract any custom categories
-    const foundCustom = new Set<string>();
+    // Extract custom categories
+    const foundExpCustom = new Set<string>();
+    const foundIncCustom = new Set<string>();
     res.data.expenses.forEach(e => {
-      if (!(DEFAULT_CATEGORIES as readonly string[]).includes(e.category)) {
-        foundCustom.add(e.category);
+      if (e.type === 'income') {
+        if (!(DEFAULT_INCOME_CATEGORIES as readonly string[]).includes(e.category)) {
+          foundIncCustom.add(e.category);
+        }
+      } else {
+        if (!(DEFAULT_CATEGORIES as readonly string[]).includes(e.category)) {
+          foundExpCustom.add(e.category);
+        }
       }
     });
-    setCustomCategories(Array.from(foundCustom));
+
+    setCustomCategories(Array.from(foundExpCustom));
+    setCustomIncomeCategories(Array.from(foundIncCustom));
 
     return {
       success: true,
-      message: `Restored ${res.data.expenses.length} expenses and ${Object.keys(res.data.budgets).length} budget plans.`
+      message: `Restored ${res.data.expenses.length} transactions and ${Object.keys(res.data.budgets).length} budget plans.`
     };
   };
 
   const clearAllData = () => {
     setExpenses([]);
     setBudgets({});
+    setInitialBalanceState(0);
     setCustomCategories([]);
+    setCustomIncomeCategories([]);
     localStorage.removeItem(STORAGE_KEYS.EXPENSES);
     localStorage.removeItem(STORAGE_KEYS.BUDGETS);
+    localStorage.removeItem(STORAGE_KEYS.INITIAL_BALANCE);
     localStorage.removeItem(STORAGE_KEYS.CUSTOM_CATS);
+    localStorage.removeItem(STORAGE_KEYS.CUSTOM_INCOME_CATS);
   };
 
   return (
@@ -292,15 +442,20 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       value={{
         expenses,
         budgets,
+        initialBalance,
+        availableBalance,
         currentMonthKey,
         currentYear,
         activeTab,
         customCategories,
+        customIncomeCategories,
         addExpense,
         updateExpense,
         deleteExpense,
         setMonthlyBudget,
         copyBudgetFromPreviousMonth,
+        adjustBalance,
+        setInitialBalance,
         setCurrentMonthKey,
         setCurrentYear,
         setActiveTab,

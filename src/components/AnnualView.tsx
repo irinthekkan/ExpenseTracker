@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
   Award,
   Calendar,
   Landmark,
@@ -12,7 +11,10 @@ import {
   ShieldCheck,
   Tag,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ArrowUpRight,
+  ArrowDownRight,
+  PiggyBank
 } from 'lucide-react';
 import { useExpenses } from '../context/ExpenseContext';
 import { calculateAnnualSummary } from '../utils/calculations';
@@ -49,7 +51,7 @@ export const AnnualView: React.FC = () => {
     }
   };
 
-  const maxMonthSpend = Math.max(...annual.monthlyBreakdown.map(m => m.total), 1);
+  const maxMonthSpend = Math.max(...annual.monthlyBreakdown.map(m => m.totalExpenses), 1);
 
   return (
     <div className="space-y-4 pb-20">
@@ -67,7 +69,7 @@ export const AnnualView: React.FC = () => {
           <h2 className="text-base font-extrabold text-slate-100 tracking-tight">
             Year {currentYear}
           </h2>
-          <span className="text-[11px] text-slate-400 font-medium">Annual Expense Overview</span>
+          <span className="text-[11px] text-slate-400 font-medium">Annual Income & Expense Overview</span>
         </div>
 
         <button
@@ -82,48 +84,52 @@ export const AnnualView: React.FC = () => {
       {/* KPI Highlight Cards */}
       <div className="grid grid-cols-2 gap-2.5">
         <div className="bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 border border-slate-800 rounded-3xl p-4 shadow-xl">
-          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            Total Annual Spend
+          <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+            <ArrowUpRight className="w-3.5 h-3.5" />
+            Total Received Income
           </span>
-          <div className="text-xl sm:text-2xl font-black text-white mt-1 tracking-tight">
-            {formatRupee(annual.totalSpent)}
+          <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1 tracking-tight">
+            {formatRupee(annual.totalIncome)}
           </div>
-          <span className="text-[10px] text-slate-500 mt-0.5 block">For all 12 months</span>
+          <span className="text-[10px] text-slate-500 mt-0.5 block">Across all 12 months</span>
         </div>
 
         <div className="bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 border border-slate-800 rounded-3xl p-4 shadow-xl">
-          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            Monthly Average
+          <span className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-1">
+            <ArrowDownRight className="w-3.5 h-3.5" />
+            Total Annual Expenses
           </span>
-          <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1 tracking-tight">
-            {formatRupee(annual.monthlyAverage)}
+          <div className="text-xl sm:text-2xl font-black text-rose-400 mt-1 tracking-tight">
+            {formatRupee(annual.totalSpent)}
           </div>
-          <span className="text-[10px] text-slate-500 mt-0.5 block">Active months avg</span>
+          <span className="text-[10px] text-slate-500 mt-0.5 block">Across all 12 months</span>
+        </div>
+
+        <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-3.5">
+          <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-medium">
+            <PiggyBank className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Annual Net Savings</span>
+          </div>
+          <div
+            className={`text-base font-black mt-1 ${
+              annual.netSavings >= 0 ? 'text-emerald-400' : 'text-rose-400'
+            }`}
+          >
+            {annual.netSavings >= 0 ? `+${formatRupee(annual.netSavings)}` : formatRupee(annual.netSavings)}
+          </div>
+          <span className="text-[10px] text-slate-500">Income minus Expenses</span>
         </div>
 
         <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-3.5">
           <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-medium">
             <Award className="w-3.5 h-3.5 text-amber-400" />
-            <span>Top Category</span>
+            <span>Top Expense Category</span>
           </div>
           <div className="text-sm font-bold text-slate-100 mt-1 truncate">
             {annual.highestCategory ? annual.highestCategory.category : 'N/A'}
           </div>
           <span className="text-[11px] font-semibold text-slate-400">
             {annual.highestCategory ? formatRupee(annual.highestCategory.amount) : '₹0'}
-          </span>
-        </div>
-
-        <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-3.5">
-          <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-medium">
-            <TrendingUp className="w-3.5 h-3.5 text-rose-400" />
-            <span>Peak Month</span>
-          </div>
-          <div className="text-sm font-bold text-slate-100 mt-1 truncate">
-            {annual.highestMonth ? annual.highestMonth.monthName : 'N/A'}
-          </div>
-          <span className="text-[11px] font-semibold text-slate-400">
-            {annual.highestMonth ? formatRupee(annual.highestMonth.amount) : '₹0'}
           </span>
         </div>
       </div>
@@ -163,7 +169,6 @@ export const AnnualView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Progress bar */}
                 <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${colors.bar}`}
@@ -181,15 +186,15 @@ export const AnnualView: React.FC = () => {
         <div className="flex items-center justify-between px-1">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-emerald-400" />
-            Monthly Distribution (Jan - Dec)
+            Monthly Cashflow & Trend (Jan - Dec)
           </h3>
         </div>
 
         <div className="space-y-2">
           {annual.monthlyBreakdown.map((m) => {
             const isExpanded = expandedMonth === m.monthKey;
-            const percentageOfPeak = maxMonthSpend > 0 ? (m.total / maxMonthSpend) * 100 : 0;
-            const hasData = m.total > 0;
+            const percentageOfPeak = maxMonthSpend > 0 ? (m.totalExpenses / maxMonthSpend) * 100 : 0;
+            const hasData = m.totalExpenses > 0 || m.totalIncome > 0;
 
             return (
               <div
@@ -205,18 +210,23 @@ export const AnnualView: React.FC = () => {
                       {m.monthName}
                     </span>
 
-                    <div className="w-24 sm:w-36 h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div className="w-20 sm:w-32 h-2 bg-slate-800 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-emerald-500 rounded-full transition-all"
+                        className="h-full bg-rose-500 rounded-full transition-all"
                         style={{ width: `${Math.min(100, percentageOfPeak)}%` }}
                       />
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white">
-                      {formatRupee(m.total)}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right text-xs">
+                      <span className="text-emerald-400 font-bold block">
+                        +{formatRupee(m.totalIncome)}
+                      </span>
+                      <span className="text-slate-400 text-[11px]">
+                        -{formatRupee(m.totalExpenses)}
+                      </span>
+                    </div>
                     {hasData && (
                       <span className="text-slate-500">
                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -230,7 +240,10 @@ export const AnnualView: React.FC = () => {
                   <div className="p-3.5 bg-slate-950/60 border-t border-slate-800/80 space-y-2.5 animate-fade-in">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-semibold text-slate-400 uppercase">
-                        Category Breakdown for {m.monthName}
+                        Net for {m.monthName}:{' '}
+                        <span className={m.netSavings >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                          {m.netSavings >= 0 ? `+${formatRupee(m.netSavings)}` : formatRupee(m.netSavings)}
+                        </span>
                       </span>
                       <button
                         onClick={(e) => {
@@ -240,7 +253,7 @@ export const AnnualView: React.FC = () => {
                         }}
                         className="text-[11px] text-emerald-400 hover:underline font-medium"
                       >
-                        Open in Monthly Tracker →
+                        Open in Tracker →
                       </button>
                     </div>
 

@@ -53,10 +53,21 @@ jobs:
         working-directory: ./android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
+      - name: Prepare Versioned APK
+        run: |
+          VERSION="0.0.${{ github.run_number }}-beta"
+          TARGET_APK="android/app/build/outputs/apk/debug/expense-tracker-${VERSION}.apk"
+          echo "Target Versioned APK: ${TARGET_APK}"
+          if [ ! -f "${TARGET_APK}" ]; then
+            echo "Ensuring versioned apk filename..."
+            cp android/app/build/outputs/apk/debug/*.apk "${TARGET_APK}" || true
+          fi
+          ls -la android/app/build/outputs/apk/debug/
+
       - name: Upload Expense Tracker APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ExpenseTracker-Android-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: expense-tracker-0.0.${{ github.run_number }}-beta
+          path: android/app/build/outputs/apk/debug/expense-tracker-0.0.*-beta.apk
           retention-days: 30
           if-no-files-found: error

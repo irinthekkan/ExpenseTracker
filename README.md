@@ -41,11 +41,15 @@ This repository is configured to build your Android APK entirely in the cloud vi
 
 ### How to Get Your Android APK:
 1. Push any commit to the `main` branch (or run the workflow manually via **Actions** -> **Run workflow**).
-2. Go to the **Actions** tab on your GitHub repository: `https://github.com/irinthekkan/ExpenseTracker/actions`
-3. Click on the latest run titled **"Build Expense Tracker APK"**.
-4. Scroll to the **Artifacts** section at the bottom of the summary page.
-5. Download **`ExpenseTracker-Android-APK`**.
-6. Unzip the downloaded file to find `app-debug.apk` and transfer/install it on your Android phone!
+2. The pipeline automatically increments the version name on every build:
+   * Build #1 ➔ `expense-tracker-0.0.1-beta.apk`
+   * Build #2 ➔ `expense-tracker-0.0.2-beta.apk`
+   * Build #3 ➔ `expense-tracker-0.0.3-beta.apk`
+3. Go to the **Actions** tab on your GitHub repository: `https://github.com/irinthekkan/ExpenseTracker/actions`
+4. Click on the latest run titled **"Build Expense Tracker APK"**.
+5. Scroll to the **Artifacts** section at the bottom of the summary page.
+6. Download **`expense-tracker-0.0.X-beta`**.
+7. Unzip the downloaded file to find **`expense-tracker-0.0.X-beta.apk`** and install it directly on your Android phone!
 
 ---
 

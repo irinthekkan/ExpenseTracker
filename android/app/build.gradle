@@ -3,17 +3,17 @@ apply plugin: 'com.android.application'
 def getBuildVersionCode() {
     def runNumber = System.getenv("GITHUB_RUN_NUMBER")
     if (runNumber != null && runNumber.isInteger()) {
-        return 100 + Integer.parseInt(runNumber)
+        return Integer.parseInt(runNumber)
     }
-    return 101
+    return 1
 }
 
 def getBuildVersionName() {
     def runNumber = System.getenv("GITHUB_RUN_NUMBER")
     if (runNumber != null) {
-        return "1.0." + runNumber
+        return "0.0." + runNumber + "-beta"
     }
-    return "1.0.1"
+    return "0.0.1-beta"
 }
 
 android {
@@ -59,6 +59,11 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
+    }
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "expense-tracker-${variant.versionName}.apk"
+        }
     }
 }
 

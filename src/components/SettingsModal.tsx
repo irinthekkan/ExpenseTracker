@@ -219,6 +219,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </p>
           </div>
 
+          {/* App Version Info */}
+          <div className="flex items-center justify-between px-1 text-slate-500 text-[11px]">
+            <span>Expense Tracker Mobile</span>
+            <span className="font-mono bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md font-semibold">
+              v0.0.1-beta
+            </span>
+          </div>
+
           {/* Danger Zone */}
           <div className="pt-2 border-t border-slate-800">
             <button
